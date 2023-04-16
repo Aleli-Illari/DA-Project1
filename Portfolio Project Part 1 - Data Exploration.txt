@@ -1,0 +1,201 @@
+USE [Portfolio Project]
+
+--Select Data that we are going to use
+Select location, date, population, total_cases, new_cases, total_deaths
+From [Portfolio Project]..CovidDeaths$
+ORDER BY 1, 2
+
+SELECT *
+FROM [Portfolio Project]..CovidDeaths$
+ORDER BY 1, 2
+
+--Change the data type for columns total cases, total deaths  
+
+
+ALTER TABLE [Portfolio Project]..CovidDeaths$
+ALTER COLUMN total_cases numeric;
+
+
+ALTER TABLE [Portfolio Project]..CovidDeaths$
+ALTER COLUMN total_deaths numeric
+
+
+--Total cases vs total deaths
+--Likelyhood of dying if you contract covid in Ecuador
+SELECT  location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 AS DeathPercentage
+FROM [Portfolio Project]..CovidDeaths$
+WHERE location = 'Ecuador'
+ORDER BY date
+--**VIEW CREATED**
+--Total cases vs population
+-- Show percentage of the population that got covid
+SELECT  location, MAX(total_cases) as TotalCases, population, (MAX(total_cases)/population)*100 AS PercentageOfInfection
+FROM [Portfolio Project]..CovidDeaths$
+WHERE continent is NOT NULL
+GROUP BY location, population
+ORDER BY location
+
+
+--Countries with highest population rate compared to population
+SELECT  location, population, MAX(total_cases) AS HighestInfectionCount, MAX((total_cases/population)*100) AS PercentPopulationInfected
+FROM [Portfolio Project]..CovidDeaths$
+WHERE continent is NOT NULL
+GROUP BY location, population
+ORDER BY PercentPopulationInfected DESC
+
+
+--**VIEW CREATED**
+-- Highest Death Count over Population
+
+SELECT  location, population, MAX(total_deaths) AS HighestDeathCount, MAX(total_deaths/population)*100 AS DeathPercentagePopulation
+FROM [Portfolio Project]..CovidDeaths$
+WHERE continent is NOT NULL
+GROUP BY location, population
+ORDER BY DeathPercentagePopulation DESC
+
+
+SELECT  location, population, MAX(total_deaths)
+FROM [Portfolio Project]..CovidDeaths$
+WHERE continent is NOT NULL
+GROUP BY location, population
+--**VIEW CREATED**
+--Highest Death Count per Country
+SELECT  location, MAX(total_deaths) AS TotalDeathsCount
+FROM [Portfolio Project]..CovidDeaths$
+WHERE continent is NOT NULL
+GROUP BY location 
+ORDER BY TotalDeathsCount DESC
+
+--**VIEW CREATED**
+--Highest Death Count per Continent
+SELECT location, MAX(total_deaths) AS TotalDeathsCount
+FROM [Portfolio Project]..CovidDeaths$
+WHERE location in ('Europe', 'Asia', 'North America', 'South America', 'Africa', 'Oceania')
+GROUP BY location 
+ORDER BY TotalDeathsCount DESC
+
+--**VIEW CREATED**
+--Continents with highetst Deaths Count over population
+SELECT  location, population, MAX(total_deaths) AS HighestDeathCount, MAX(total_deaths/population)*100 AS DeathPercentagePopulation
+FROM [Portfolio Project]..CovidDeaths$
+WHERE location in ('Europe', 'Asia', 'North America', 'South America', 'Africa', 'Oceania')
+GROUP BY location, population
+ORDER BY DeathPercentagePopulation DESC
+
+--Change the data type for columns new cases, new deaths  
+
+
+ALTER TABLE [Portfolio Project]..CovidDeaths$
+ALTER COLUMN new_cases numeric;
+
+
+ALTER TABLE [Portfolio Project]..CovidDeaths$
+ALTER COLUMN new_deaths numeric
+
+
+
+--GLOBAL NUMBERS
+SELECT  SUM(New_deaths) AS TotalDeaths, SUM(New_cases) AS TotalCases, (SUM(New_deaths)/SUM(New_cases))*100 AS DeathsPercentage
+FROM [Portfolio Project]..CovidDeaths$
+WHERE continent is NULL
+
+
+--LOOKING AT POPULATION VS VACCINATIONS
+
+--Change the data type for new_vaccinations 
+ALTER TABLE [Portfolio Project]..CovidVaccinations$
+ALTER COLUMN new_vaccinations numeric
+
+--**VIEW CREATED**
+--LOOKING AT POPULATION VS VACCINATIONS
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,  
+		SUM (vac.new_vaccinations) OVER (Partition by dea.location order by dea.location, dea.date) AS RollingPeopleVaccinated
+FROM [Portfolio Project]..CovidDeaths$ AS dea 
+	JOIN [Portfolio Project]..CovidVaccinations$ AS vac
+	ON dea.location = vac.location AND
+	dea.date = vac.date
+WHERE dea.continent is NOT NULL
+ORDER BY dea.location, dea.date
+--USE A CTE
+
+WITH PopvsVac (continent, location, date, population, new_vaccinations, RollingPeopleVaccinated)
+	AS 
+	(SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,  
+		SUM (vac.new_vaccinations) OVER (Partition by dea.location order by dea.location, dea.date) AS RollingPeopleVaccinated
+	 FROM [Portfolio Project]..CovidDeaths$ AS dea 
+	 JOIN [Portfolio Project]..CovidVaccinations$ AS vac
+	 ON dea.location = vac.location AND 
+	 dea.date = vac.date
+	 WHERE dea.continent is NOT NULL)
+SELECT *, (RollingPeopleVaccinated/population)*100 AS VaccinatedPeopleOverPopulation
+FROM PopvsVac
+
+--TEMP TABLE
+DROP TABLE IF EXISTS #PercentPopulationVaccinated
+CREATE TABLE #PercentPopulationVaccinated
+(Continent nvarchar(255),
+Location nvarchar (255), 
+date datetime,
+population numeric,
+new_vaccinations numeric,
+RollingPeopleVaccinated numeric)
+
+INSERT INTO #PercentPopulationVaccinated
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,  
+		SUM (vac.new_vaccinations) OVER (Partition by dea.location order by dea.location, dea.date) AS RollingPeopleVaccinated
+	 FROM [Portfolio Project]..CovidDeaths$ AS dea 
+	 JOIN [Portfolio Project]..CovidVaccinations$ AS vac
+	 ON dea.location = vac.location AND 
+	 dea.date = vac.date
+	 WHERE dea.continent is NOT NULL
+
+SELECT *, (RollingPeopleVaccinated/population)*100 AS VaccinatedPeopleOverPopulation
+FROM #PercentPopulationVaccinated
+
+--Creating views to store data for later visualizations
+CREATE VIEW PercentPopulationVac AS
+SELECT dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,  
+		SUM (vac.new_vaccinations) OVER (Partition by dea.location order by dea.location, dea.date) AS RollingPeopleVaccinated
+	 FROM [Portfolio Project]..CovidDeaths$ AS dea 
+	 JOIN [Portfolio Project]..CovidVaccinations$ AS vac
+	 ON dea.location = vac.location AND 
+	 dea.date = vac.date
+	 WHERE dea.continent is NOT NULL
+
+CREATE VIEW PercentageOfInfection AS
+--Total cases vs population
+-- Show percentage of the population that got covid
+SELECT  location, MAX(total_cases) as TotalCases, population, (MAX(total_cases)/population)*100 AS PercentageOfInfection
+FROM [Portfolio Project]..CovidDeaths$
+WHERE continent is NOT NULL
+GROUP BY location, population
+
+
+CREATE VIEW DeathPercentage AS
+-- Highest Death Count over Population
+SELECT  location, population, MAX(total_deaths) AS HighestDeathCount, MAX(total_deaths/population)*100 AS DeathPercentagePopulation
+FROM [Portfolio Project]..CovidDeaths$
+WHERE continent is NOT NULL
+GROUP BY location, population
+
+CREATE VIEW TotalDeathsCount AS
+SELECT  location, MAX(total_deaths) AS TotalDeathsCount
+FROM [Portfolio Project]..CovidDeaths$
+WHERE continent is NOT NULL
+GROUP BY location 
+
+CREATE VIEW TotalDeathsContinent AS
+--Highest Death Count per Continent
+SELECT location, MAX(total_deaths) AS TotalDeathsCount
+FROM [Portfolio Project]..CovidDeaths$
+WHERE location in ('Europe', 'Asia', 'North America', 'South America', 'Africa', 'Oceania')
+GROUP BY location 
+
+CREATE VIEW DeathRateOverPopulation AS
+--Continents with highetst Deaths Count over population
+SELECT  location, population, MAX(total_deaths) AS HighestDeathCount, MAX(total_deaths/population)*100 AS DeathPercentagePopulation
+FROM [Portfolio Project]..CovidDeaths$
+--WHERE location = 'Ecuador'
+WHERE location in ('Europe', 'Asia', 'North America', 'South America', 'Africa', 'Oceania')
+GROUP BY location, population
+
